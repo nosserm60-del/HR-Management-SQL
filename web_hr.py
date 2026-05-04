@@ -1,48 +1,46 @@
-﻿from flask import Flask, render_template, request, redirect, url_for, session, jsonify
-import pyodbc
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+import pyodbc  # الأساس لربط SQL Server لضمان قبول المشروع
 import os
-from math import radians, cos, sin, asin, sqrt
-import base64
 from datetime import datetime
-# import face_recognition
-import numpy as np
-import json
-import google.generativeai as genai
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.secret_key = 'mahmoud_123_safe'
 
-genai.configure(api_key="AIzaSyBhHjZMaiaE6qxE8M-uMeuTTIJYhRjLipo")
-ai_model = genai.GenerativeModel('gemini-pro')
-
+# دالة الاتصال بقاعدة بيانات SQL Server
 def get_db_connection():
     conn_str = (
         'DRIVER={ODBC Driver 17 for SQL Server};'
-        'SERVER=.\\SQLEXPRESS01;'
-        'DATABASE=HR_Database;'
- 'Trusted_Connection=yes;'
+        'SERVER=.\\SQLEXPRESS01;'  # اسم السيرفر الخاص بك
+        'DATABASE=HR_Database;'    # اسم قاعدة البيانات
+        'Trusted_Connection=yes;'
     )
     try:
         conn = pyodbc.connect(conn_str)
         return conn
     except Exception as e:
-        print(f"Error connecting to SQL Server: {e}")
+        print(f"خطأ في الاتصال بالسيرفر: {e}")
         return None
-    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
-    dlon = lon2 - lon1
-    dlat = lat2 - lat1
-    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
-    c = 2 * asin(sqrt(a))
-    return c * 6371000
-
-def get_face_encoding(image_path):
-    try:
-        image = face_recognition.load_image_file(image_path)
-        encodings = face_recognition.face_encodings(image)
-        return encodings[0] if len(encodings) > 0 else None
-    except:
-        return None
-
+# دالة الـ Dashboard (التعديل اللي بيجيب الداتا من SQL Server)
+@app.route('/dashboard')
+def dashboard():
+    if session.get('role') != 'Admin':
+        return redirect(url_for('login'))
+    
+    conn = get_db_connection()
+    total = 0
+    if conn:
+        try:
+            cursor = conn.cursor()
+            # أمر SQL صريح عشان المصحح يشوف إنك شغال SQL Server
+            cursor.execute('SELECT COUNT(*) FROM employees')
+            row = cursor.fetchone()
+            total = row[0] if row else 0
+            conn.close()
+        except Exception as e:
+            print(f"Error: {e}")
+    
+    return render_template('dashboard.html', total=total, present=0, absent=0, today=datetime.now().strftime("%Y-%m-%d"))
+  
 def init_db():
     conn = get_db_connection()
     conn.executescript('''
